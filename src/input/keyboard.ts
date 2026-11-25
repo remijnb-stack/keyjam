@@ -4,6 +4,7 @@ export type Action =
   | { type: "pad"; padId: string }
   | { type: "record" }
   | { type: "play" }
+  | { type: "dropLast" }
   | { type: "undo" }
   | { type: "clear" }
   | { type: "metronome" }
@@ -19,8 +20,11 @@ export interface KeyPress {
 }
 
 export function actionForKey(key: KeyPress, padIdForCode: (code: string) => string | undefined): Action | null {
-  // Leave browser and system shortcuts (Ctrl+R, Cmd+W, ...) alone.
-  if (key.ctrlKey || key.metaKey || key.altKey) return null;
+  // Ctrl+Z (Cmd+Z on a Mac) undoes; other browser and system shortcuts (Ctrl+R, Cmd+W, ...) are left alone.
+  if (key.ctrlKey || key.metaKey || key.altKey) {
+    const undo = key.code === "KeyZ" && !key.shiftKey && !key.altKey && (key.ctrlKey || key.metaKey);
+    return undo ? { type: "undo" } : null;
+  }
 
   // Holding an arrow keeps changing the tempo; holding anything else does nothing.
   if (key.code === "ArrowUp" || key.code === "ArrowDown") {
@@ -36,7 +40,7 @@ export function actionForKey(key: KeyPress, padIdForCode: (code: string) => stri
     case "NumpadEnter":
       return { type: "play" };
     case "Backspace":
-      return { type: "undo" };
+      return { type: "dropLast" };
     case "Escape":
       return { type: "clear" };
     case "KeyM":

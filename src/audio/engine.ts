@@ -59,8 +59,8 @@ export class AudioEngine {
     return failed;
   }
 
-  /** Plays a pad now, or at `time` on the audio clock. */
-  playPad(pad: Pad, time = this.ctx.currentTime): void {
+  /** Plays a pad now, or at `time` on the audio clock, at `velocity` (0..1) of its volume. */
+  playPad(pad: Pad, time = this.ctx.currentTime, velocity = 1): void {
     const buffer = this.buffers.get(pad.id);
     if (!buffer) return;
     if (pad.choke) this.choke(pad.choke, time);
@@ -68,7 +68,7 @@ export class AudioEngine {
     const source = this.ctx.createBufferSource();
     source.buffer = buffer;
     const gain = this.ctx.createGain();
-    gain.gain.value = pad.gain;
+    gain.gain.value = pad.gain * velocity;
     source.connect(gain).connect(this.out);
     this.start({ source, gain, start: time, choke: pad.choke });
   }

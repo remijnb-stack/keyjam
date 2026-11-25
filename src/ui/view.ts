@@ -1,10 +1,14 @@
-// The screen: transport bar, beat display, the 4x4 pads and the key help.
-// Built once; `render` runs every animation frame and only touches what changed.
+// The screen: transport bar, beat display, the 4x4 pads, the Layers side
+// bar, the layer editor and the key help. Built once; `render` runs every
+// animation frame and only touches what changed.
 
 import { HIGH_LATENCY, MAX_OFFSET_MS, MIN_OFFSET_MS } from "../audio/latency";
 import type { Action } from "../input/keyboard";
 import type { Pad } from "../kit";
 import { LOOP_BAR_OPTIONS, type LoopBars, type Looper, BEATS_PER_BAR, MAX_BPM, MIN_BPM } from "../looper/looper";
+import { button, h, setText } from "./dom";
+import { Editor, type EditorHandlers } from "./editor";
+import { type LayerHandlers, LayersPanel } from "./layers";
 
 export interface ViewHandlers {
   action(action: Action): void;
@@ -12,32 +16,8 @@ export interface ViewHandlers {
   quantize(): void;
   offset(ms: number): void;
   start(): void;
-}
-
-type Attrs = Record<string, string>;
-
-function h<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  attrs: Attrs = {},
-  ...children: (Node | string)[]
-): HTMLElementTagNameMap[K] {
-  const el = document.createElement(tag);
-  for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, value);
-  el.append(...children);
-  return el;
-}
-
-function setText(el: HTMLElement, text: string): void {
-  if (el.textContent !== text) el.textContent = text;
-}
-
-/** A button that never takes keyboard focus, so Space and Enter keep their looper meaning. */
-function button(label: string, title: string, onPress: () => void, className = ""): HTMLButtonElement {
-  const el = h("button", { type: "button", title, class: className }, label);
-  el.tabIndex = -1;
-  el.addEventListener("mousedown", (e) => e.preventDefault());
-  el.addEventListener("click", onPress);
-  return el;
+  layer: Omit<LayerHandlers, "open">;
+  editor: Omit<EditorHandlers, "close">;
 }
 
 export class View {
@@ -46,7 +26,9 @@ export class View {
   private readonly overlay: HTMLElement;
   private readonly overlayText: HTMLElement;
   private readonly status: HTMLElement;
-  private readonly layers: HTMLElement;
+  private readonly layerCount: HTMLElement;
+  private readonly panel: LayersPanel;
+  private readonly editor: Editor;
   private readonly bpm: HTMLElement;
   private readonly beats: HTMLElement;
   private beatCells: HTMLElement[] = [];
@@ -60,8 +42,24 @@ export class View {
   private readonly offsetInput: HTMLInputElement;
   private readonly offsetValue: HTMLElement;
 
-  constructor(root: HTMLElement, rows: Pad[][], handlers: ViewHandlers) {
+  constructor(
+    root: HTMLElement,
+    rows: Pad[][],
+    handlers: ViewHandlers,
+    private readonly onLayersChanged: () => void,
+  ) {
     const act = (action: Action) => () => handlers.action(action);
+    this.panel = new LayersPanel({
+      ...handlers.layer,
+      open: (id) => {
+        this.editor.show(id);
+        this.onLayersChanged();
+      },
+    });
+    this.editor = new Editor(rows.flat(), {
+      ...handlers.editor,
+      close: () => this.closeEditor(),
+    });
 
     this.bpm = h("output", { class: "bpm-value", "aria-live": "polite" });
     const tempo = h(
@@ -91,12 +89,12 @@ export class View {
       { class: "group" },
       this.recordButton,
       this.playButton,
-      button("Undo", "Remove the last layer (Backspace)", act({ type: "undo" })),
+      button("Undo", "Undo the last change (Ctrl+Z)", act({ type: "undo" })),
       button("Clear", "Stop and clear everything (Esc)", act({ type: "clear" })),
     );
 
     this.status = h("span", { class: "status" });
-    this.layers = h("span", { class: "layers" });
+    this.layerCount = h("span", { class: "layers" });
     this.beats = h("div", { class: "beats", "aria-hidden": "true" });
 
     const grid = h("div", { class: "pads" });
@@ -120,8 +118,9 @@ export class View {
     const keys: [string, string][] = [
       ["Space", "record / keep layer"],
       ["Enter", "play / stop"],
-      ["Backspace", "undo layer"],
-      ["Esc", "clear all"],
+      ["Backspace", "remove last layer"],
+      ["Ctrl+Z", "undo"],
+      ["Esc", "close editor / clear all"],
       ["M", "metronome"],
       ["↑ ↓", "tempo (Shift: ±10)"],
     ];
@@ -180,13 +179,38 @@ export class View {
         { class: "app" },
         h("header", {}, h("h1", {}, "keyjam"), h("span", { class: "tagline" }, "drums on your keyboard")),
         h("section", { class: "controls" }, tempo, barsGroup, h("div", { class: "group" }, this.metronomeButton, this.quantizeButton), transport),
-        h("section", { class: "timeline" }, h("div", { class: "timeline-info" }, this.status, this.layers), this.beats),
-        grid,
+        h(
+          "div",
+          { class: "workspace" },
+          h(
+            "div",
+            { class: "play-area" },
+            h("section", { class: "timeline" }, h("div", { class: "timeline-info" }, this.status, this.layerCount), this.beats),
+            grid,
+          ),
+          this.panel.el,
+        ),
+        this.editor.el,
         help,
         audio,
       ),
       this.overlay,
     );
+  }
+
+  get editorOpen(): boolean {
+    return this.editor.open;
+  }
+
+  closeEditor(): void {
+    this.editor.hide();
+    this.onLayersChanged();
+  }
+
+  /** Redraws the side bar and the editor. Call after anything about the layers changed. */
+  updateLayers(looper: Looper): void {
+    this.editor.update(looper);
+    this.panel.update(looper, this.editor.layerId);
   }
 
   showOverlay(text: string): void {
@@ -253,11 +277,14 @@ export class View {
     setText(this.playButton, looper.running ? "■ Stop" : "▶ Play");
 
     const count = looper.layerCount;
-    setText(this.layers, count === 0 ? "No layers yet" : `${count} layer${count > 1 ? "s" : ""}`);
+    setText(this.layerCount, count === 0 ? "No layers yet" : `${count} layer${count > 1 ? "s" : ""}`);
 
     if (this.beatCells.length !== looper.loopBeats) this.buildBeats(looper.loopBeats);
     const position = looper.position(now);
     const current = position?.kind === "loop" ? Math.floor(position.beat) : -1;
+    const fraction = position?.kind === "loop" ? position.beat / looper.loopBeats : null;
+    this.panel.renderPlayhead(fraction);
+    this.editor.renderPlayhead(fraction);
     this.beatCells.forEach((cell, i) => cell.classList.toggle("now", i === current));
     this.beats.classList.toggle("recording", looper.recording);
 

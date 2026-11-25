@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Looper } from "./looper";
+import { Looper, MIN_VELOCITY, offGrid, stepOf } from "./looper";
 
 // At 60 BPM one beat is one second, which keeps the arithmetic readable.
 // Recording from a stop at time 0 counts in one bar: beat 0 falls at 4.05 s.
@@ -46,7 +46,7 @@ describe("count-in", () => {
     const looper = recordingLooper();
     looper.quantize = false;
     looper.hit("kick", DOWNBEAT - 0.1);
-    expect(pads(looper, 8, 16)).toEqual([{ kind: "pad", pad: "kick", beat: 8 }]);
+    expect(pads(looper, 8, 16)).toEqual([{ kind: "pad", pad: "kick", beat: 8, velocity: 1 }]);
   });
 });
 
@@ -55,7 +55,7 @@ describe("recording", () => {
     const looper = recordingLooper();
     looper.hit("snare", DOWNBEAT + 1.1);
     expect(pads(looper, 0, 8)).toEqual([]); // already heard live
-    expect(pads(looper, 8, 16)).toEqual([{ kind: "pad", pad: "snare", beat: 9 }]);
+    expect(pads(looper, 8, 16)).toEqual([{ kind: "pad", pad: "snare", beat: 9, velocity: 1 }]);
   });
 
   it("keeps the exact timing when quantize is off", () => {
@@ -70,7 +70,7 @@ describe("recording", () => {
     const looper = recordingLooper(1);
     looper.hit("kick", DOWNBEAT + 3.95); // rounds to beat 4 = next cycle's downbeat
     expect(pads(looper, 4, 8)).toEqual([]);
-    expect(pads(looper, 8, 12)).toEqual([{ kind: "pad", pad: "kick", beat: 8 }]);
+    expect(pads(looper, 8, 12)).toEqual([{ kind: "pad", pad: "kick", beat: 8, velocity: 1 }]);
   });
 
   it("keeps a take as a layer and keeps playing", () => {
@@ -97,8 +97,8 @@ describe("recording", () => {
     looper.toggleRecord(DOWNBEAT + 12);
     expect(looper.layerCount).toBe(2);
     expect(pads(looper, 16, 24)).toEqual([
-      { kind: "pad", pad: "kick", beat: 16 },
-      { kind: "pad", pad: "hat", beat: 17 },
+      { kind: "pad", pad: "kick", beat: 16, velocity: 1 },
+      { kind: "pad", pad: "hat", beat: 17, velocity: 1 },
     ]);
   });
 
@@ -153,7 +153,7 @@ describe("transport", () => {
   });
 });
 
-describe("undo and clear", () => {
+describe("drop last and clear", () => {
   it("drops the take being recorded first, then the last layer", () => {
     const looper = recordingLooper();
     looper.hit("kick", DOWNBEAT);
@@ -161,11 +161,11 @@ describe("undo and clear", () => {
     looper.toggleRecord(DOWNBEAT + 9);
     looper.hit("hat", DOWNBEAT + 9);
 
-    looper.undo();
+    looper.dropLast();
     expect(looper.recording).toBe(false);
     expect(looper.layerCount).toBe(1);
 
-    looper.undo();
+    looper.dropLast();
     expect(looper.layerCount).toBe(0);
   });
 
@@ -188,5 +188,172 @@ describe("loop length", () => {
     looper.clear();
     looper.setBars(4);
     expect(looper.bars).toBe(4);
+  });
+});
+
+/** A playing 1-bar loop at 60 BPM with one recorded layer: kick on beat 0, snare on beat 2. */
+function loopWithLayer(): Looper {
+  const looper = recordingLooper(1);
+  looper.hit("kick", DOWNBEAT);
+  looper.hit("snare", DOWNBEAT + 2);
+  looper.toggleRecord(DOWNBEAT + 3.5);
+  return looper;
+}
+
+const padsIn = (looper: Looper, from: number, to: number) =>
+  pads(looper, from, to).map((e) => (e.kind === "pad" ? `${e.pad}@${e.beat}` : ""));
+
+describe("layers", () => {
+  it("names layers in order and starts over after a clear", () => {
+    const looper = loopWithLayer();
+    looper.toggleRecord(DOWNBEAT + 4);
+    looper.hit("hat", DOWNBEAT + 5);
+    looper.toggleRecord(DOWNBEAT + 7);
+    expect(looper.layers.map((l) => l.name)).toEqual(["Layer 1", "Layer 2"]);
+
+    looper.clear();
+    looper.toggleRecord(100);
+    looper.hit("kick", 100 + 4.05);
+    looper.toggleRecord(100 + 5);
+    expect(looper.layers.map((l) => l.name)).toEqual(["Layer 1"]);
+  });
+
+  it("silences a muted layer at once", () => {
+    const looper = loopWithLayer();
+    const [layer] = looper.layers;
+    looper.toggleMute(layer.id);
+    expect(pads(looper, 4, 8)).toEqual([]);
+    looper.toggleMute(layer.id);
+    expect(padsIn(looper, 4, 8)).toEqual(["kick@4", "snare@6"]);
+  });
+
+  it("plays only soloed layers while any layer is soloed", () => {
+    const looper = loopWithLayer();
+    looper.toggleRecord(DOWNBEAT + 4);
+    looper.hit("hat", DOWNBEAT + 5);
+    looper.toggleRecord(DOWNBEAT + 7);
+    const [first, second] = looper.layers;
+
+    looper.toggleSolo(second.id);
+    expect(padsIn(looper, 8, 12)).toEqual(["hat@9"]);
+    looper.toggleSolo(second.id);
+    looper.toggleMute(first.id);
+    expect(padsIn(looper, 8, 12)).toEqual(["hat@9"]);
+  });
+
+  it("keeps playing the take being recorded, whatever is soloed", () => {
+    const looper = loopWithLayer();
+    looper.toggleSolo(looper.layers[0].id);
+    looper.toggleRecord(DOWNBEAT + 4);
+    looper.hit("hat", DOWNBEAT + 5);
+    expect(padsIn(looper, 8, 12)).toEqual(["kick@8", "hat@9", "snare@10"]);
+  });
+
+  it("deletes any layer, not just the last", () => {
+    const looper = loopWithLayer();
+    looper.toggleRecord(DOWNBEAT + 4);
+    looper.hit("hat", DOWNBEAT + 5);
+    looper.toggleRecord(DOWNBEAT + 7);
+    looper.deleteLayer(looper.layers[0].id);
+    expect(looper.layers.map((l) => l.name)).toEqual(["Layer 2"]);
+  });
+});
+
+describe("editing a layer", () => {
+  it("adds a hit at full volume in an empty cell; it plays on the next pass", () => {
+    const looper = loopWithLayer();
+    const id = looper.layers[0].id;
+    looper.toggleStep(id, "hat", 6); // step 6 = beat 1.5
+    expect(padsIn(looper, 4, 8)).toEqual(["kick@4", "hat@5.5", "snare@6"]);
+  });
+
+  it("removes the pad's hit from a filled cell", () => {
+    const looper = loopWithLayer();
+    looper.toggleStep(looper.layers[0].id, "snare", 8);
+    expect(padsIn(looper, 4, 8)).toEqual(["kick@4"]);
+  });
+
+  it("finds off-grid hits in their nearest cell", () => {
+    const looper = recordingLooper(1);
+    looper.quantize = false;
+    looper.hit("snare", DOWNBEAT + 1.1); // nearest step 4
+    looper.toggleRecord(DOWNBEAT + 3);
+    const layer = looper.layers[0];
+    expect(stepOf(layer.hits[0].beat, looper.loopSteps)).toBe(4);
+    expect(offGrid(layer.hits[0].beat)).toBeCloseTo(0.4);
+    looper.toggleStep(layer.id, "snare", 4);
+    expect(layer.hits).toEqual([]);
+  });
+
+  it("treats a hit at the end of the loop as part of the first cell", () => {
+    expect(stepOf(3.95, 16)).toBe(0);
+  });
+
+  it("changes the volume of a hit, within 5–100%", () => {
+    const looper = loopWithLayer();
+    const id = looper.layers[0].id;
+    looper.changeVelocity(id, "kick", 0, -0.5);
+    expect(pads(looper, 4, 5)).toEqual([{ kind: "pad", pad: "kick", beat: 4, velocity: 0.5 }]);
+    looper.changeVelocity(id, "kick", 0, -2);
+    expect(looper.layers[0].hits[0].velocity).toBe(MIN_VELOCITY);
+    looper.changeVelocity(id, "kick", 0, 5);
+    expect(looper.layers[0].hits[0].velocity).toBe(1);
+  });
+
+  it("ignores volume changes on empty cells", () => {
+    const looper = loopWithLayer();
+    looper.changeVelocity(looper.layers[0].id, "hat", 3, -0.5);
+    looper.undo(); // only the recording itself is in the history
+    expect(looper.layerCount).toBe(0);
+  });
+});
+
+describe("undo (Ctrl+Z)", () => {
+  it("undoes grid edits one at a time", () => {
+    const looper = loopWithLayer();
+    const id = looper.layers[0].id;
+    looper.toggleStep(id, "hat", 2);
+    looper.toggleStep(id, "kick", 0);
+    looper.undo();
+    expect(padsIn(looper, 4, 8)).toEqual(["kick@4", "hat@4.5", "snare@6"]);
+    looper.undo();
+    expect(padsIn(looper, 4, 8)).toEqual(["kick@4", "snare@6"]);
+  });
+
+  it("undoes one whole drag on a hit's volume in one step", () => {
+    const looper = loopWithLayer();
+    const id = looper.layers[0].id;
+    looper.changeVelocity(id, "kick", 0, -0.1);
+    looper.changeVelocity(id, "kick", 0, -0.1);
+    looper.endEdit();
+    looper.changeVelocity(id, "kick", 0, -0.1);
+    looper.undo();
+    expect(looper.layers[0].hits[0].velocity).toBeCloseTo(0.8);
+    looper.undo();
+    expect(looper.layers[0].hits[0].velocity).toBe(1);
+  });
+
+  it("brings back a deleted layer, a dropped layer and a cleared loop", () => {
+    const looper = loopWithLayer();
+    looper.deleteLayer(looper.layers[0].id);
+    looper.undo();
+    expect(looper.layerCount).toBe(1);
+
+    looper.dropLast();
+    looper.undo();
+    expect(looper.layerCount).toBe(1);
+
+    looper.clear();
+    looper.setBars(4);
+    looper.undo();
+    expect(looper.layerCount).toBe(1);
+    expect(looper.bars).toBe(1); // the layers' own loop length comes back too
+  });
+
+  it("removes a just-recorded layer", () => {
+    const looper = loopWithLayer();
+    looper.undo();
+    expect(looper.layerCount).toBe(0);
+    expect(looper.canUndo).toBe(false);
   });
 });
