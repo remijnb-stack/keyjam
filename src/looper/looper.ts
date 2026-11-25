@@ -48,6 +48,21 @@ export type LoopPosition =
   | { kind: "countIn"; beatsLeft: number }
   | { kind: "loop"; beat: number; cycle: number };
 
+/** A loop as it is saved: no transport state, no history. */
+export interface SavedLoop {
+  bpm: number;
+  bars: LoopBars;
+  quantize: boolean;
+  metronome: boolean;
+  nextNumber: number;
+  layers: {
+    name: string;
+    muted: boolean;
+    soloed: boolean;
+    hits: { pad: string; beat: number; velocity: number }[];
+  }[];
+}
+
 interface Snapshot {
   layers: Layer[];
   bars: LoopBars;
@@ -288,6 +303,44 @@ export class Looper {
     this.layerList = snapshot.layers;
     this.bars = snapshot.bars;
     this.nextNumber = snapshot.nextNumber;
+    this.lastEditKey = null;
+  }
+
+  // Saving
+
+  exportLoop(): SavedLoop {
+    return {
+      bpm: this.bpm,
+      bars: this.bars,
+      quantize: this.quantize,
+      metronome: this.metronome,
+      nextNumber: this.nextNumber,
+      layers: this.layerList.map((layer) => ({
+        name: layer.name,
+        muted: layer.muted,
+        soloed: layer.soloed,
+        hits: layer.hits.map(({ pad, beat, velocity }) => ({ pad, beat, velocity })),
+      })),
+    };
+  }
+
+  /** Replaces everything with a saved loop (already checked), stopped. */
+  importLoop(saved: SavedLoop): void {
+    this.bpm = saved.bpm;
+    this.bars = saved.bars;
+    this.quantize = saved.quantize;
+    this.metronome = saved.metronome;
+    this.nextNumber = saved.nextNumber;
+    this.layerList = saved.layers.map((layer) => ({
+      id: this.nextId++,
+      name: layer.name,
+      muted: layer.muted,
+      soloed: layer.soloed,
+      hits: layer.hits.map((hit) => ({ ...hit, firstCycle: 0 })),
+    }));
+    this.take = null;
+    this.startTime = null;
+    this.history = [];
     this.lastEditKey = null;
   }
 

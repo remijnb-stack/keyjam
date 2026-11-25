@@ -3,16 +3,27 @@ import { AudioEngine } from "./audio/engine";
 import { clampOffset, heardTime } from "./audio/latency";
 import { Scheduler } from "./audio/scheduler";
 import { actionForKey, type Action } from "./input/keyboard";
-import { PAD_BY_CODE, PAD_BY_ID, PAD_ROWS, PADS } from "./kit";
+import { copyKit, DEFAULT_KIT, type Kit, PAD_BY_CODE, PAD_BY_ID, PAD_ROWS, PADS } from "./kit";
 import { Looper } from "./looper/looper";
 import { loadOffset, saveOffset } from "./settings";
+import { cleanSettings } from "./sound";
+import { loadSession, saveSession } from "./storage";
+import type { Param } from "./ui/sound";
 import { View } from "./ui/view";
 
+const SAVE_DELAY_MS = 400;
+
 const looper = new Looper();
+const session = loadSession();
+let kit: Kit = session.kit;
+if (session.loop) looper.importLoop(session.loop);
+
 let engine: AudioEngine | null = null;
 let scheduler: Scheduler | null = null;
 /** The player's own latency correction for recording, in ms. */
 let offsetMs = loadOffset();
+/** The pad whose sound the Sound block shows. */
+let selectedPad: string | null = null;
 
 const view = new View(
   document.querySelector<HTMLElement>("#app")!,
@@ -42,20 +53,49 @@ const view = new View(
       velocity: (id, pad, step, delta) => edit(() => looper.changeVelocity(id, pad, step, delta)),
       endEdit: () => looper.endEdit(),
     },
+    select: (padId) => dispatch({ type: "select", padId }),
+    sound: {
+      choose: (padId, sampleId) => changeSound(padId, { sample: sampleId }, true),
+      set: (padId, param: Param, value) => changeSound(padId, { [param]: value }, false),
+      reset: () => {
+        if (!confirm("Put every pad back to its default sound?")) return;
+        kit = copyKit(DEFAULT_KIT);
+        void loadKitSamples();
+        kitChanged();
+      },
+    },
   },
   () => view.updateLayers(looper),
 );
 view.updateLayers(looper);
+view.showKit(kit, selectedPad);
+
+// Saving: the kit and the loop are saved shortly after each change, and when the page goes away.
+
+let saveTimer: number | undefined;
+
+function scheduleSave(): void {
+  clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(saveNow, SAVE_DELAY_MS);
+}
+
+function saveNow(): void {
+  clearTimeout(saveTimer);
+  saveSession(kit, looper.exportLoop());
+}
+
+window.addEventListener("pagehide", saveNow);
+
+// Audio
 
 /** Audio may only start after a key press or click, so the first one starts it. */
 function boot(): void {
   if (engine) return;
-  const audio = new AudioEngine();
+  const audio = new AudioEngine(`${import.meta.env.BASE_URL}samples/808/`);
   engine = audio;
   view.showOverlay("Loading sounds…");
 
-  void audio.loadKit(PADS, `${import.meta.env.BASE_URL}samples/808/`).then((failed) => {
-    view.markUnavailable(failed);
+  void loadKitSamples().then(() => {
     view.hideOverlay();
     scheduler = new Scheduler(
       looper,
@@ -67,13 +107,21 @@ function boot(): void {
         }
         const pad = PAD_BY_ID.get(event.pad);
         if (!pad) return;
-        audio.playPad(pad, time, event.velocity);
+        audio.playPad(pad, kit[pad.id], time, event.velocity);
         view.flash(pad.id, (time - audio.ctx.currentTime) * 1000);
       },
     );
     scheduler.start();
     requestAnimationFrame(frame);
   });
+}
+
+/** Loads the samples the kit uses; pads whose sample fails are greyed out. */
+async function loadKitSamples(): Promise<void> {
+  const audio = engine;
+  if (!audio) return;
+  await Promise.all(PADS.map((pad) => audio.load(kit[pad.id].sample)));
+  view.markUnavailable(PADS.filter((pad) => audio.failed(kit[pad.id].sample)).map((pad) => pad.id));
 }
 
 function frame(): void {
@@ -84,6 +132,34 @@ function frame(): void {
   requestAnimationFrame(frame);
 }
 
+/** Plays a pad without recording it: for picking and shaping sounds. */
+function preview(padId: string): void {
+  const pad = PAD_BY_ID.get(padId);
+  if (!engine || !pad) return;
+  engine.playPad(pad, kit[padId]);
+  view.flash(padId);
+}
+
+/** Changes part of a pad's sound. A new sample loads first, then plays. */
+function changeSound(padId: string, change: Partial<Kit[string]>, play: boolean): void {
+  const next = cleanSettings({ ...kit[padId], ...change });
+  if (!next) return;
+  kit = { ...kit, [padId]: next };
+  kitChanged();
+  if (!engine || !play) return;
+  void engine.load(next.sample).then(() => {
+    view.markUnavailable(PADS.filter((pad) => engine!.failed(kit[pad.id].sample)).map((pad) => pad.id));
+    preview(padId);
+  });
+}
+
+function kitChanged(): void {
+  view.showKit(kit, selectedPad);
+  scheduleSave();
+}
+
+// Looper
+
 /** After the loop changes, drop what was booked ahead and book it again. */
 function resync(): void {
   if (!engine || !scheduler) return;
@@ -92,10 +168,11 @@ function resync(): void {
   scheduler.resync();
 }
 
-/** Redraws everything that depends on the looper. */
+/** Redraws everything that depends on the looper, and saves. */
 function refresh(): void {
   view.updateLayers(looper);
   if (engine) view.render(looper, engine.ctx.currentTime);
+  scheduleSave();
 }
 
 /** Applies a change to the layers, so the loop and the screen follow it at once. */
@@ -115,7 +192,7 @@ function dispatch(action: Action, pressedAt?: number): void {
     case "pad": {
       const pad = PAD_BY_ID.get(action.padId);
       if (!pad) return;
-      engine.playPad(pad);
+      engine.playPad(pad, kit[pad.id]);
       // Record the hit where the player meant it: at what they were hearing.
       const handlerDelay = pressedAt === undefined ? 0 : (performance.now() - pressedAt) / 1000;
       looper.hit(pad.id, heardTime({ now, handlerDelay, latency: engine.latency, offsetMs }));
@@ -123,6 +200,11 @@ function dispatch(action: Action, pressedAt?: number): void {
       if (looper.recording) view.updateLayers(looper);
       return;
     }
+    case "select":
+      selectedPad = action.padId;
+      view.showKit(kit, selectedPad);
+      preview(action.padId);
+      return;
     case "record":
       looper.toggleRecord(now);
       break;
@@ -155,7 +237,7 @@ function dispatch(action: Action, pressedAt?: number): void {
 
 window.addEventListener("keydown", (event) => {
   if (!engine) {
-    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.ctrlKey || event.metaKey || event.altKey || event.key === "Shift") return;
     event.preventDefault();
     boot();
     return;

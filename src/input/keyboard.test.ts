@@ -22,6 +22,10 @@ describe("actionForKey", () => {
     expect(action(press("Digit1"))).toEqual({ type: "pad", padId: "cymbal" });
   });
 
+  it("selects a pad with Shift+key", () => {
+    expect(action(press("KeyZ", { shiftKey: true }))).toEqual({ type: "select", padId: "kick" });
+  });
+
   it("maps the looper controls", () => {
     expect(action(press("Space"))).toEqual({ type: "record" });
     expect(action(press("Enter"))).toEqual({ type: "play" });

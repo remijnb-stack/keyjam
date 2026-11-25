@@ -2,6 +2,7 @@
 
 export type Action =
   | { type: "pad"; padId: string }
+  | { type: "select"; padId: string }
   | { type: "record" }
   | { type: "play" }
   | { type: "dropLast" }
@@ -47,6 +48,8 @@ export function actionForKey(key: KeyPress, padIdForCode: (code: string) => stri
       return { type: "metronome" };
   }
 
+  // Shift+pad key selects the pad to change its sound.
   const padId = padIdForCode(key.code);
-  return padId ? { type: "pad", padId } : null;
+  if (!padId) return null;
+  return key.shiftKey ? { type: "select", padId } : { type: "pad", padId };
 }
