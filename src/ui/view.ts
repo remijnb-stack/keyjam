@@ -133,7 +133,7 @@ export class View {
       ["Enter", "play / stop"],
       ["Backspace", "remove last layer"],
       ["Ctrl+Z", "undo"],
-      ["Esc", "close editor / clear all"],
+      ["Esc", "close editor or sound / clear all"],
       ["M", "metronome"],
       ["↑ ↓", "tempo (Shift: ±10)"],
     ];

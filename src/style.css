@@ -766,6 +766,16 @@ kbd {
   text-overflow: ellipsis;
 }
 
+.sound-head button.small {
+  width: 28px;
+  padding: 3px 0;
+  font-size: 0.75rem;
+}
+
+.sound-head button[hidden] {
+  display: none;
+}
+
 button.small-text {
   padding: 3px 8px;
   font-size: 0.75rem;

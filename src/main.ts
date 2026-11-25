@@ -63,6 +63,7 @@ const view = new View(
         void loadKitSamples();
         kitChanged();
       },
+      close: deselect,
     },
   },
   () => view.updateLayers(looper),
@@ -153,6 +154,11 @@ function changeSound(padId: string, change: Partial<Kit[string]>, play: boolean)
   });
 }
 
+function deselect(): void {
+  selectedPad = null;
+  view.showKit(kit, selectedPad);
+}
+
 function kitChanged(): void {
   view.showKit(kit, selectedPad);
   scheduleSave();
@@ -218,9 +224,13 @@ function dispatch(action: Action, pressedAt?: number): void {
       looper.undo();
       break;
     case "clear":
-      // Esc closes the editor first, so it never clears the loop by surprise.
+      // Esc closes what's open first (editor, then Sound), so it never clears the loop by surprise.
       if (view.editorOpen) {
         view.closeEditor();
+        return;
+      }
+      if (selectedPad !== null) {
+        deselect();
         return;
       }
       looper.clear();
