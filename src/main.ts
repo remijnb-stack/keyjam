@@ -1,14 +1,18 @@
 import "./style.css";
 import { AudioEngine } from "./audio/engine";
+import { clampOffset, heardTime } from "./audio/latency";
 import { Scheduler } from "./audio/scheduler";
 import { actionForKey, type Action } from "./input/keyboard";
 import { PAD_BY_CODE, PAD_BY_ID, PAD_ROWS, PADS } from "./kit";
 import { Looper } from "./looper/looper";
+import { loadOffset, saveOffset } from "./settings";
 import { View } from "./ui/view";
 
 const looper = new Looper();
 let engine: AudioEngine | null = null;
 let scheduler: Scheduler | null = null;
+/** The player's own latency correction for recording, in ms. */
+let offsetMs = loadOffset();
 
 const view = new View(document.querySelector<HTMLElement>("#app")!, PAD_ROWS, {
   action: dispatch,
@@ -19,6 +23,10 @@ const view = new View(document.querySelector<HTMLElement>("#app")!, PAD_ROWS, {
   quantize: () => {
     looper.quantize = !looper.quantize;
     if (engine) view.render(looper, engine.ctx.currentTime);
+  },
+  offset: (ms) => {
+    offsetMs = clampOffset(ms);
+    saveOffset(offsetMs);
   },
   start: boot,
 });
@@ -53,7 +61,10 @@ function boot(): void {
 }
 
 function frame(): void {
-  if (engine) view.render(looper, engine.ctx.currentTime);
+  if (engine) {
+    view.render(looper, engine.ctx.currentTime);
+    view.renderAudio(engine.latency, offsetMs);
+  }
   requestAnimationFrame(frame);
 }
 
@@ -65,7 +76,8 @@ function resync(): void {
   scheduler.resync();
 }
 
-function dispatch(action: Action): void {
+/** `pressedAt` is the key event's timestamp (performance.now() clock), if known. */
+function dispatch(action: Action, pressedAt?: number): void {
   if (!engine || !scheduler) return;
   void engine.ctx.resume();
   const now = engine.ctx.currentTime;
@@ -75,7 +87,9 @@ function dispatch(action: Action): void {
       const pad = PAD_BY_ID.get(action.padId);
       if (!pad) return;
       engine.playPad(pad);
-      looper.hit(pad.id, now);
+      // Record the hit where the player meant it: at what they were hearing.
+      const handlerDelay = pressedAt === undefined ? 0 : (performance.now() - pressedAt) / 1000;
+      looper.hit(pad.id, heardTime({ now, handlerDelay, latency: engine.latency, offsetMs }));
       view.flash(pad.id);
       return;
     }
@@ -112,5 +126,5 @@ window.addEventListener("keydown", (event) => {
   const action = actionForKey(event, (code) => PAD_BY_CODE.get(code)?.id);
   if (!action) return;
   event.preventDefault();
-  dispatch(action);
+  dispatch(action, event.timeStamp);
 });

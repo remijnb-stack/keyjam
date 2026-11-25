@@ -38,7 +38,22 @@ The loop is 1, 2 or 4 bars long; pick the length before you record.
 **Quantize 1/16** snaps what you record to the nearest 1/16 note, so loops
 sound tight even when your timing isn't. Turn it off to keep your exact timing.
 
-Nothing is saved yet: reloading the page starts fresh.
+Nothing is saved yet: reloading the page starts fresh (except the latency
+offset below).
+
+## Latency
+
+Sound reaches your ears a little after you press a key. The number at the
+bottom of the page (**Latency … ms**) is what the browser reports for your
+speakers or headphones. Wired headphones and laptop speakers are usually
+10–40 ms; **Bluetooth is often 150–300 ms**, which makes drumming feel late,
+and no app can remove that.
+
+Because you play along with what you hear, keyjam records each hit at the
+moment you were *hearing* when you pressed the key, so loops line up even
+with some latency. If your recorded hits still land late, move **Latency
+offset** to the right; early, to the left. The offset is saved in your
+browser.
 
 ## Development
 
@@ -52,7 +67,8 @@ npm run build   # production build in dist/
 Vite + TypeScript, no framework. Sound runs on the Web Audio API.
 
 - `src/looper/looper.ts` is the looper's state and timing (tested, no browser APIs).
-- `src/audio/` plays sounds and books loop events slightly ahead on the audio clock.
+- `src/audio/` plays sounds, books loop events slightly ahead on the audio clock,
+  and corrects recorded hits for latency (`latency.ts`).
 - `src/input/keyboard.ts` maps keys to actions; `src/kit.ts` defines the pads.
 - `src/ui/view.ts` draws the screen.
 

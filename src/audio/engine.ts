@@ -2,6 +2,11 @@
 // scheduled at an exact time on the audio clock, which keeps loops tight.
 
 import type { Pad } from "../kit";
+import { softClipCurve } from "./softClip";
+
+const MASTER_VOLUME = 0.8;
+/** The clipper handles peaks up to this many times full scale. */
+const CLIP_RANGE = 2;
 
 interface Voice {
   source: AudioScheduledSourceNode;
@@ -17,18 +22,22 @@ export class AudioEngine {
   private voices = new Set<Voice>();
 
   constructor() {
-    this.ctx = new AudioContext({ latencyHint: "interactive" });
-    // A gentle limiter so stacked layers don't clip.
-    const limiter = this.ctx.createDynamicsCompressor();
-    limiter.threshold.value = -6;
-    limiter.knee.value = 6;
-    limiter.ratio.value = 8;
-    limiter.attack.value = 0.003;
-    limiter.release.value = 0.15;
+    // 0 asks for the smallest audio buffer the device allows.
+    this.ctx = new AudioContext({ latencyHint: 0 });
+    // Stacked layers can peak above full scale. A soft clipper rounds those
+    // peaks off without the ~6 ms look-ahead delay a compressor adds.
     const master = this.ctx.createGain();
-    master.gain.value = 0.8;
-    master.connect(limiter).connect(this.ctx.destination);
+    master.gain.value = MASTER_VOLUME / CLIP_RANGE;
+    const clipper = this.ctx.createWaveShaper();
+    clipper.curve = softClipCurve(2048, CLIP_RANGE);
+    clipper.oversample = "none";
+    master.connect(clipper).connect(this.ctx.destination);
     this.out = master;
+  }
+
+  /** Seconds between playing a sound and hearing it, as far as the browser knows. */
+  get latency(): number {
+    return (this.ctx.baseLatency || 0) + (this.ctx.outputLatency || 0);
   }
 
   /** Loads every sample. A sample that fails to load leaves its pad silent; returns their ids. */
