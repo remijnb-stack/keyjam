@@ -1,6 +1,7 @@
 // The screen: transport bar, beat display, the 4x4 pads and the key help.
 // Built once; `render` runs every animation frame and only touches what changed.
 
+import { HIGH_LATENCY, MAX_OFFSET_MS, MIN_OFFSET_MS } from "../audio/latency";
 import type { Action } from "../input/keyboard";
 import type { Pad } from "../kit";
 import { LOOP_BAR_OPTIONS, type LoopBars, type Looper, BEATS_PER_BAR, MAX_BPM, MIN_BPM } from "../looper/looper";
@@ -9,6 +10,7 @@ export interface ViewHandlers {
   action(action: Action): void;
   bars(bars: LoopBars): void;
   quantize(): void;
+  offset(ms: number): void;
   start(): void;
 }
 
@@ -53,6 +55,10 @@ export class View {
   private readonly quantizeButton: HTMLButtonElement;
   private readonly recordButton: HTMLButtonElement;
   private readonly playButton: HTMLButtonElement;
+  private readonly latency: HTMLElement;
+  private readonly latencyHint: HTMLElement;
+  private readonly offsetInput: HTMLInputElement;
+  private readonly offsetValue: HTMLElement;
 
   constructor(root: HTMLElement, rows: Pad[][], handlers: ViewHandlers) {
     const act = (action: Action) => () => handlers.action(action);
@@ -125,6 +131,41 @@ export class View {
       ...keys.map(([key, what]) => h("li", {}, h("kbd", {}, key), ` ${what}`)),
     );
 
+    this.latency = h("span", { class: "latency" });
+    this.latencyHint = h(
+      "span",
+      { class: "latency-hint" },
+      "High latency: wired headphones or speakers react much faster than Bluetooth.",
+    );
+    this.offsetInput = h("input", {
+      type: "range",
+      min: String(MIN_OFFSET_MS),
+      max: String(MAX_OFFSET_MS),
+      step: "1",
+      "aria-label": "Latency offset",
+    });
+    // Keep keyboard focus off the slider, so the arrow keys keep changing the tempo.
+    this.offsetInput.tabIndex = -1;
+    this.offsetInput.addEventListener("input", () => handlers.offset(Number(this.offsetInput.value)));
+    this.offsetInput.addEventListener("change", () => this.offsetInput.blur());
+    this.offsetValue = h("output", { class: "offset-value" });
+    const audio = h(
+      "section",
+      { class: "audio" },
+      this.latency,
+      h(
+        "label",
+        {
+          class: "offset",
+          title: "Recorded hits land late? Move right. Early? Move left.",
+        },
+        "Latency offset",
+        this.offsetInput,
+        this.offsetValue,
+      ),
+      this.latencyHint,
+    );
+
     this.overlayText = h("p", {}, "Press any key or click to start");
     this.overlay = h(
       "div",
@@ -142,6 +183,7 @@ export class View {
         h("section", { class: "timeline" }, h("div", { class: "timeline-info" }, this.status, this.layers), this.beats),
         grid,
         help,
+        audio,
       ),
       this.overlay,
     );
@@ -187,6 +229,14 @@ export class View {
   cancelFlashes(): void {
     for (const timer of this.flashTimers) clearTimeout(timer);
     this.flashTimers.clear();
+  }
+
+  /** Shows the latency the browser reports (seconds) and the player's offset (ms). */
+  renderAudio(latency: number, offsetMs: number): void {
+    setText(this.latency, `Latency ${Math.round(latency * 1000)} ms`);
+    this.latencyHint.hidden = latency <= HIGH_LATENCY;
+    if (document.activeElement !== this.offsetInput) this.offsetInput.value = String(offsetMs);
+    setText(this.offsetValue, `${offsetMs > 0 ? "+" : ""}${offsetMs} ms`);
   }
 
   render(looper: Looper, now: number): void {
