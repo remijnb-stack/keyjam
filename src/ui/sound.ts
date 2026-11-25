@@ -13,6 +13,8 @@ export interface SoundHandlers {
   choose(padId: string, sampleId: string): void;
   set(padId: string, param: Param, value: number): void;
   reset(): void;
+  /** Deselects the pad, which closes the block. */
+  close(): void;
 }
 
 interface Slider {
@@ -30,6 +32,7 @@ const percent = (v: number) => `${Math.round(v * 100)}%`;
 export class SoundPanel {
   readonly el: HTMLElement;
   private readonly padName: HTMLElement;
+  private readonly closeButton: HTMLButtonElement;
   private readonly empty: HTMLElement;
   private readonly body: HTMLElement;
   private readonly chips = new Map<GroupId, HTMLButtonElement>();
@@ -41,6 +44,7 @@ export class SoundPanel {
 
   constructor(private readonly handlers: SoundHandlers) {
     this.padName = h("span", { class: "sound-pad" });
+    this.closeButton = button("✕", "Close (Esc)", () => this.handlers.close(), "small");
     this.empty = h("p", { class: "empty" }, "Press Shift + a pad's key, or click its name, to change its sound.");
 
     const chipRow = h("div", { class: "chips" });
@@ -75,6 +79,7 @@ export class SoundPanel {
         h("h2", {}, "Sound"),
         this.padName,
         button("Reset kit", "Put every pad back to its default sound", () => this.handlers.reset(), "small-text"),
+        this.closeButton,
       ),
       this.empty,
       this.body,
@@ -85,6 +90,7 @@ export class SoundPanel {
   update(kit: Kit, padId: string | null): void {
     this.empty.hidden = padId !== null;
     this.body.hidden = padId === null;
+    this.closeButton.hidden = padId === null;
     const pad = padId ? PAD_BY_ID.get(padId) : undefined;
     if (!padId || !pad) {
       this.padId = null;

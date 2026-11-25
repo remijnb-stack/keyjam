@@ -35,7 +35,8 @@ The **Sound** block in the side bar then shows that pad:
   **Volume**. Double-click a slider to reset it.
 
 Settings belong to the pad, so they also change what's already recorded on
-it. **Reset kit** puts every pad back to its default sound.
+it. **Reset kit** puts every pad back to its default sound. Close the block
+with **✕** or `Esc`.
 
 ## Looping
 
@@ -45,7 +46,7 @@ it. **Reset kit** puts every pad back to its default sound.
 | `Enter` | Play / stop |
 | `Backspace` | Remove the last layer (or the one you're recording) |
 | `Ctrl+Z` (`Cmd+Z`) | Undo: brings back edits, deleted layers or a cleared loop |
-| `Esc` | Close the layer editor; otherwise stop and clear everything |
+| `Esc` | Close the layer editor or the Sound block; with both closed, stop and clear everything |
 | `M` | Metronome on / off |
 | `↑` `↓` | Tempo ±1 BPM (with `Shift`: ±10) |
 
