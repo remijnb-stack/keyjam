@@ -4,11 +4,13 @@
 
 import { HIGH_LATENCY, MAX_OFFSET_MS, MIN_OFFSET_MS } from "../audio/latency";
 import type { Action } from "../input/keyboard";
-import type { Pad } from "../kit";
+import type { Kit, Pad } from "../kit";
+import { SAMPLE_BY_ID, variantLabel } from "../library";
 import { LOOP_BAR_OPTIONS, type LoopBars, type Looper, BEATS_PER_BAR, MAX_BPM, MIN_BPM } from "../looper/looper";
 import { button, h, setText } from "./dom";
 import { Editor, type EditorHandlers } from "./editor";
 import { type LayerHandlers, LayersPanel } from "./layers";
+import { type SoundHandlers, SoundPanel } from "./sound";
 
 export interface ViewHandlers {
   action(action: Action): void;
@@ -18,10 +20,15 @@ export interface ViewHandlers {
   start(): void;
   layer: Omit<LayerHandlers, "open">;
   editor: Omit<EditorHandlers, "close">;
+  /** Selects a pad to change its sound (Shift+key, or clicking its name). */
+  select(padId: string): void;
+  sound: SoundHandlers;
 }
 
 export class View {
   private readonly padEls = new Map<string, HTMLElement>();
+  private readonly padNames = new Map<string, { name: HTMLElement; variant: HTMLElement }>();
+  private readonly soundPanel: SoundPanel;
   private readonly flashTimers = new Set<number>();
   private readonly overlay: HTMLElement;
   private readonly overlayText: HTMLElement;
@@ -56,6 +63,7 @@ export class View {
         this.onLayersChanged();
       },
     });
+    this.soundPanel = new SoundPanel(handlers.sound);
     this.editor = new Editor(rows.flat(), {
       ...handlers.editor,
       close: () => this.closeEditor(),
@@ -100,16 +108,21 @@ export class View {
     const grid = h("div", { class: "pads" });
     for (const row of rows) {
       for (const pad of row) {
+        const name = h("span", { class: "name", title: "Change this sound (Shift+key)" });
+        const variant = h("span", { class: "variant" });
         const el = h(
           "div",
-          { class: `pad row-${pad.row}`, role: "button", "aria-label": `${pad.name} (${pad.label})` },
+          { class: `pad row-${pad.row}`, role: "button" },
           h("span", { class: "key" }, pad.label),
-          h("span", { class: "name" }, pad.name),
+          h("span", { class: "pad-sound" }, name, variant),
         );
         el.addEventListener("pointerdown", (e) => {
           e.preventDefault();
-          handlers.action({ type: "pad", padId: pad.id });
+          // Clicking the sound's name selects the pad; anywhere else plays it.
+          if ((e.target as HTMLElement).closest(".pad-sound")) handlers.select(pad.id);
+          else handlers.action({ type: "pad", padId: pad.id });
         });
+        this.padNames.set(pad.id, { name, variant });
         this.padEls.set(pad.id, el);
         grid.append(el);
       }
@@ -188,7 +201,7 @@ export class View {
             h("section", { class: "timeline" }, h("div", { class: "timeline-info" }, this.status, this.layerCount), this.beats),
             grid,
           ),
-          this.panel.el,
+          h("div", { class: "side" }, this.soundPanel.el, this.panel.el),
         ),
         this.editor.el,
         help,
@@ -222,14 +235,29 @@ export class View {
     this.overlay.hidden = true;
   }
 
+  /** Pads whose sound couldn't be loaded are greyed out. */
   markUnavailable(padIds: string[]): void {
-    for (const id of padIds) {
-      const el = this.padEls.get(id);
-      if (el) {
-        el.classList.add("unavailable");
-        el.title = "This sound couldn't be loaded";
-      }
+    for (const [id, el] of this.padEls) {
+      const unavailable = padIds.includes(id);
+      el.classList.toggle("unavailable", unavailable);
+      el.title = unavailable ? "This sound couldn't be loaded" : "";
     }
+  }
+
+  /** Shows the kit: each pad's sound name, the selected pad, and the Sound block. */
+  showKit(kit: Kit, selected: string | null): void {
+    const names = new Map<string, string>();
+    for (const [padId, { name, variant }] of this.padNames) {
+      const sample = SAMPLE_BY_ID.get(kit[padId].sample);
+      const padName = sample?.family.name ?? kit[padId].sample;
+      names.set(padId, padName);
+      setText(name, padName);
+      setText(variant, sample ? variantLabel(sample) : "");
+      this.padEls.get(padId)?.classList.toggle("selected", padId === selected);
+      this.padEls.get(padId)?.setAttribute("aria-label", padName);
+    }
+    this.editor.setNames(names);
+    this.soundPanel.update(kit, selected);
   }
 
   /** Lights up a pad now, or after `delayMs` (for sounds the loop plays). */

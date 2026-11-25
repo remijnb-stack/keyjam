@@ -34,6 +34,7 @@ export class Editor {
   private readonly grid: HTMLElement;
   private readonly playhead: HTMLElement;
   private cells = new Map<string, HTMLElement>();
+  private readonly labelNames = new Map<string, HTMLElement>();
   private steps = 0;
   private drag: Drag | null = null;
   layerId: number | null = null;
@@ -61,9 +62,9 @@ export class Editor {
     this.el.hidden = true;
 
     for (const pad of this.pads) {
-      this.labels.append(
-        h("div", { class: `editor-label row-${pad.row}` }, h("kbd", {}, pad.label), ` ${pad.name}`),
-      );
+      const name = h("span", {});
+      this.labelNames.set(pad.id, name);
+      this.labels.append(h("div", { class: `editor-label row-${pad.row}` }, h("kbd", {}, pad.label), name));
     }
 
     this.grid.addEventListener("pointerdown", (e) => this.onPointerDown(e));
@@ -71,6 +72,11 @@ export class Editor {
     this.grid.addEventListener("pointerup", () => this.onPointerUp());
     this.grid.addEventListener("pointercancel", () => this.onPointerUp());
     this.grid.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
+  }
+
+  /** Row labels: each pad's current sound name. */
+  setNames(names: Map<string, string>): void {
+    for (const [padId, el] of this.labelNames) setText(el, names.get(padId) ?? "");
   }
 
   get open(): boolean {

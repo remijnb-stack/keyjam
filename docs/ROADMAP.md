@@ -33,12 +33,12 @@ Three pull requests, in this order.
 - [x] `Ctrl+Z` undoes edits and deleted layers; `Backspace` still removes the last layer
 
 **Kit (v1.5b)**
-- [ ] `Shift`+key or clicking a pad's name selects it; a *Sound* block in the side
+- [x] `Shift`+key or clicking a pad's name selects it; a *Sound* block in the side
       bar shows its settings
-- [ ] Choose any of the 116 TR-808 samples per pad, grouped by type, with preview
-- [ ] Per pad: Pitch (±12 semitones), Tone, Length, Volume. Settings apply to
+- [x] Choose any of the 116 TR-808 samples per pad, grouped by type, with preview
+- [x] Per pad: Pitch (±12 semitones), Tone, Length, Volume. Settings apply to
       recorded hits too
-- [ ] Kit and last loop saved in the browser (layers, hit volumes, mute/solo,
+- [x] Kit and last loop saved in the browser (layers, hit volumes, mute/solo,
       tempo, loop length, latency offset), with *Reset kit*
 
 ## v2: melody

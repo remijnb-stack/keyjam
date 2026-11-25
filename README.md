@@ -22,6 +22,21 @@ Press any key to start, then play the pads:
 The grid works like the 4×4 pads on a pad controller. The closed hat cuts off
 the open hat, as on a real drum machine.
 
+## Changing sounds
+
+Press `Shift` + a pad's key, or click the sound name on a pad, to select it.
+The **Sound** block in the side bar then shows that pad:
+
+- Pick any of the 116 TR-808 recordings, grouped by type. Kicks, snares and
+  cymbals were sampled at 5 × 5 knob positions on the real machine, so they
+  show as a grid (for a kick: tone down, decay across). Click one to hear it.
+- **Pitch** (±12 semitones; lower is also longer, like a sampler), **Tone**
+  (from dull to as recorded), **Length** (fade the sound out sooner) and
+  **Volume**. Double-click a slider to reset it.
+
+Settings belong to the pad, so they also change what's already recorded on
+it. **Reset kit** puts every pad back to its default sound.
+
 ## Looping
 
 | Key | What it does |
@@ -51,8 +66,8 @@ line showing where they really are.
 **Quantize 1/16** snaps what you record to the nearest 1/16 note, so loops
 sound tight even when your timing isn't. Turn it off to keep your exact timing.
 
-Nothing is saved yet: reloading the page starts fresh (except the latency
-offset below).
+Your kit and your last loop (layers, hit volumes, mute and solo, tempo, loop
+length) are saved in this browser, so they're still there after a reload.
 
 ## Latency
 
@@ -82,15 +97,19 @@ Vite + TypeScript, no framework. Sound runs on the Web Audio API.
 - `src/looper/looper.ts` is the looper's state and timing (tested, no browser APIs).
 - `src/audio/` plays sounds, books loop events slightly ahead on the audio clock,
   and corrects recorded hits for latency (`latency.ts`).
-- `src/input/keyboard.ts` maps keys to actions; `src/kit.ts` defines the pads.
-- `src/ui/view.ts` draws the screen; `layers.ts` is the side bar, `editor.ts` the grid.
+- `src/input/keyboard.ts` maps keys to actions; `src/kit.ts` defines the pads and the
+  default kit, `src/library.ts` the samples, `src/sound.ts` a pad's sound settings.
+- `src/storage.ts` saves the kit and loop in the browser and checks what it reads back.
+- `src/ui/view.ts` draws the screen; `sound.ts` and `layers.ts` are the side bar,
+  `editor.ts` the grid.
 
 Merging to `main` publishes the site to GitHub Pages. Plans are in
 [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Sounds
 
-The drum sounds are Roland TR-808 samples recorded by Michael Fischer in 1994
-and shared freely without licensing restrictions (see
-[`public/samples/808/TR808.TXT`](public/samples/808/TR808.TXT)). They were
-trimmed of trailing silence for keyjam.
+The drum sounds are the full set of 116 Roland TR-808 samples recorded by
+Michael Fischer in 1994 and shared freely without licensing restrictions (see
+[`public/samples/808/TR808.TXT`](public/samples/808/TR808.TXT) for the file
+naming). They were trimmed of trailing silence for keyjam. Only the sounds in
+use are downloaded.
