@@ -25,7 +25,7 @@ describe("actionForKey", () => {
   it("maps the looper controls", () => {
     expect(action(press("Space"))).toEqual({ type: "record" });
     expect(action(press("Enter"))).toEqual({ type: "play" });
-    expect(action(press("Backspace"))).toEqual({ type: "undo" });
+    expect(action(press("Backspace"))).toEqual({ type: "dropLast" });
     expect(action(press("Escape"))).toEqual({ type: "clear" });
     expect(action(press("KeyM"))).toEqual({ type: "metronome" });
   });
@@ -39,6 +39,13 @@ describe("actionForKey", () => {
   it("ignores held keys, so a pad doesn't machine-gun", () => {
     expect(action(press("KeyZ", { repeat: true }))).toBeNull();
     expect(action(press("Space", { repeat: true }))).toBeNull();
+  });
+
+  it("undoes with Ctrl+Z or Cmd+Z, also held", () => {
+    expect(action(press("KeyZ", { ctrlKey: true }))).toEqual({ type: "undo" });
+    expect(action(press("KeyZ", { metaKey: true }))).toEqual({ type: "undo" });
+    expect(action(press("KeyZ", { ctrlKey: true, repeat: true }))).toEqual({ type: "undo" });
+    expect(action(press("KeyZ", { ctrlKey: true, shiftKey: true }))).toBeNull();
   });
 
   it("leaves browser shortcuts alone", () => {

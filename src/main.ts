@@ -14,22 +14,38 @@ let scheduler: Scheduler | null = null;
 /** The player's own latency correction for recording, in ms. */
 let offsetMs = loadOffset();
 
-const view = new View(document.querySelector<HTMLElement>("#app")!, PAD_ROWS, {
-  action: dispatch,
-  bars: (bars) => {
-    looper.setBars(bars);
-    if (engine) view.render(looper, engine.ctx.currentTime);
+const view = new View(
+  document.querySelector<HTMLElement>("#app")!,
+  PAD_ROWS,
+  {
+    action: dispatch,
+    bars: (bars) => {
+      looper.setBars(bars);
+      refresh();
+    },
+    quantize: () => {
+      looper.quantize = !looper.quantize;
+      refresh();
+    },
+    offset: (ms) => {
+      offsetMs = clampOffset(ms);
+      saveOffset(offsetMs);
+    },
+    start: boot,
+    layer: {
+      mute: (id) => edit(() => looper.toggleMute(id)),
+      solo: (id) => edit(() => looper.toggleSolo(id)),
+      remove: (id) => edit(() => looper.deleteLayer(id)),
+    },
+    editor: {
+      toggle: (id, pad, step) => edit(() => looper.toggleStep(id, pad, step)),
+      velocity: (id, pad, step, delta) => edit(() => looper.changeVelocity(id, pad, step, delta)),
+      endEdit: () => looper.endEdit(),
+    },
   },
-  quantize: () => {
-    looper.quantize = !looper.quantize;
-    if (engine) view.render(looper, engine.ctx.currentTime);
-  },
-  offset: (ms) => {
-    offsetMs = clampOffset(ms);
-    saveOffset(offsetMs);
-  },
-  start: boot,
-});
+  () => view.updateLayers(looper),
+);
+view.updateLayers(looper);
 
 /** Audio may only start after a key press or click, so the first one starts it. */
 function boot(): void {
@@ -51,7 +67,7 @@ function boot(): void {
         }
         const pad = PAD_BY_ID.get(event.pad);
         if (!pad) return;
-        audio.playPad(pad, time);
+        audio.playPad(pad, time, event.velocity);
         view.flash(pad.id, (time - audio.ctx.currentTime) * 1000);
       },
     );
@@ -76,6 +92,19 @@ function resync(): void {
   scheduler.resync();
 }
 
+/** Redraws everything that depends on the looper. */
+function refresh(): void {
+  view.updateLayers(looper);
+  if (engine) view.render(looper, engine.ctx.currentTime);
+}
+
+/** Applies a change to the layers, so the loop and the screen follow it at once. */
+function edit(change: () => void): void {
+  change();
+  resync();
+  refresh();
+}
+
 /** `pressedAt` is the key event's timestamp (performance.now() clock), if known. */
 function dispatch(action: Action, pressedAt?: number): void {
   if (!engine || !scheduler) return;
@@ -91,6 +120,7 @@ function dispatch(action: Action, pressedAt?: number): void {
       const handlerDelay = pressedAt === undefined ? 0 : (performance.now() - pressedAt) / 1000;
       looper.hit(pad.id, heardTime({ now, handlerDelay, latency: engine.latency, offsetMs }));
       view.flash(pad.id);
+      if (looper.recording) view.updateLayers(looper);
       return;
     }
     case "record":
@@ -99,10 +129,18 @@ function dispatch(action: Action, pressedAt?: number): void {
     case "play":
       looper.togglePlay(now);
       break;
+    case "dropLast":
+      looper.dropLast();
+      break;
     case "undo":
       looper.undo();
       break;
     case "clear":
+      // Esc closes the editor first, so it never clears the loop by surprise.
+      if (view.editorOpen) {
+        view.closeEditor();
+        return;
+      }
       looper.clear();
       break;
     case "metronome":
@@ -112,8 +150,7 @@ function dispatch(action: Action, pressedAt?: number): void {
       looper.setBpm(looper.bpm + action.delta, now);
       break;
   }
-  resync();
-  view.render(looper, now);
+  edit(() => {});
 }
 
 window.addEventListener("keydown", (event) => {

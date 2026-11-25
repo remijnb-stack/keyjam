@@ -24,13 +24,13 @@ Three pull requests, in this order.
       headphones or speakers instead of Bluetooth?
 
 **Layers (v1.5a)**
-- [ ] Side bar *Layers* next to the pads (below them on narrow screens): a card
+- [x] Side bar *Layers* next to the pads (below them on narrow screens): a card
       per layer with name, mini timeline of hits, mute (M), solo (S), delete (✕).
       Mute works at once
-- [ ] Click a layer to edit it in a full-width grid below: 16 pad rows × 1/16
+- [x] Click a layer to edit it in a full-width grid below: 16 pad rows × 1/16
       columns, playhead. Click to add or remove a hit; scroll or drag on a hit to
       change its volume. Off-grid hits show in the nearest cell with a marker
-- [ ] `Ctrl+Z` undoes edits and deleted layers; `Backspace` still removes the last layer
+- [x] `Ctrl+Z` undoes edits and deleted layers; `Backspace` still removes the last layer
 
 **Kit (v1.5b)**
 - [ ] `Shift`+key or clicking a pad's name selects it; a *Sound* block in the side
