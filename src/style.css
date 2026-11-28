@@ -78,10 +78,14 @@ button {
   border-radius: 8px;
   padding: 7px 12px;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
-button:hover:not(:disabled) {
-  border-color: var(--muted);
+@media (hover: hover) {
+  button:hover:not(:disabled) {
+    border-color: var(--muted);
+  }
 }
 
 button:disabled {
@@ -267,7 +271,10 @@ button.record.on {
   justify-content: space-between;
   cursor: pointer;
   user-select: none;
-  touch-action: manipulation;
+  -webkit-user-select: none;
+  /* Fast taps never zoom or scroll the page. */
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .pad .key {
@@ -288,9 +295,11 @@ button.record.on {
   font-size: 0.85rem;
 }
 
-.pad-sound:hover .name {
-  color: var(--text);
-  text-decoration: underline;
+@media (hover: hover) {
+  .pad-sound:hover .name {
+    color: var(--text);
+    text-decoration: underline;
+  }
 }
 
 .pad .variant {
@@ -300,6 +309,20 @@ button.record.on {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* On touch screens: ✎ in the corner selects the pad, to change its sound. */
+.pad .pad-edit {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 1.1rem;
 }
 
 .pad.selected {
@@ -489,8 +512,10 @@ kbd {
   cursor: pointer;
 }
 
-.layer-card:hover {
-  border-color: var(--muted);
+@media (hover: hover) {
+  .layer-card:hover {
+    border-color: var(--muted);
+  }
 }
 
 .layer-card.editing {
@@ -678,8 +703,10 @@ kbd {
   box-shadow: -2px 0 0 var(--muted);
 }
 
-.cell:hover {
-  outline: 1px solid var(--muted);
+@media (hover: hover) {
+  .cell:hover {
+    outline: 1px solid var(--muted);
+  }
 }
 
 /* A hit: the fill height shows its volume. */
@@ -863,4 +890,103 @@ button.variant.on {
 .slider-value {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+/* Keyboard or touch screen: texts and controls for one only */
+
+@media (hover: hover), (pointer: fine), (pointer: none) {
+  .touch-only {
+    display: none !important;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .keys-only {
+    display: none !important;
+  }
+
+  /* No pull-to-refresh while playing. */
+  html {
+    overscroll-behavior-y: none;
+  }
+
+  /* Without the key letter, the sound's name is the pad's label. */
+  .pad {
+    justify-content: flex-end;
+  }
+
+  .pad .name {
+    color: var(--text);
+    font-size: 0.9rem;
+  }
+}
+
+/* Phone held upright: the play controls, beat display and pads fill the
+   screen; loop length, quantize, Clear and the side bar are below. */
+
+.app.phone {
+  padding: 0 12px 32px;
+}
+
+.stage {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100vh;
+  height: 100svh;
+  min-height: 540px;
+  padding: 12px 0;
+}
+
+.stage h1 {
+  font-size: 1.2rem;
+}
+
+.stage .controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.stage .controls button,
+.more button {
+  min-height: 44px;
+}
+
+.stage .controls button.small {
+  width: 44px;
+}
+
+.stage .transport {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.stage .timeline {
+  padding: 8px 10px;
+  gap: 6px;
+}
+
+.stage .beat {
+  padding: 4px 0;
+}
+
+.stage .pads {
+  flex: 1;
+  min-height: 0;
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.stage .pad {
+  aspect-ratio: auto;
+}
+
+.more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }

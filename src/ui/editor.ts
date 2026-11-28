@@ -4,7 +4,7 @@
 
 import type { Pad } from "../kit";
 import { BEATS_PER_BAR, type Looper, STEPS_PER_BEAT, offGrid, stepOf } from "../looper/looper";
-import { button, h, setText } from "./dom";
+import { button, h, keysOrTouch, setText } from "./dom";
 
 export interface EditorHandlers {
   toggle(layerId: number, pad: string, step: number): void;
@@ -54,7 +54,14 @@ export class Editor {
         "div",
         { class: "editor-head" },
         this.title,
-        h("span", { class: "hint" }, "Click to add or remove a hit · drag up/down or scroll on a hit for volume"),
+        h(
+          "span",
+          { class: "hint" },
+          ...keysOrTouch(
+            "Click to add or remove a hit · drag up/down or scroll on a hit for volume",
+            "Tap to add or remove a hit · drag up or down on a hit for volume",
+          ),
+        ),
         button("✕", "Close the editor (Esc)", () => this.handlers.close(), "small"),
       ),
       h("div", { class: "editor-body" }, this.labels, h("div", { class: "editor-scroll" }, this.grid)),
@@ -64,7 +71,7 @@ export class Editor {
     for (const pad of this.pads) {
       const name = h("span", {});
       this.labelNames.set(pad.id, name);
-      this.labels.append(h("div", { class: `editor-label row-${pad.row}` }, h("kbd", {}, pad.label), name));
+      this.labels.append(h("div", { class: `editor-label row-${pad.row}` }, h("kbd", { class: "keys-only" }, pad.label), name));
     }
 
     this.grid.addEventListener("pointerdown", (e) => this.onPointerDown(e));

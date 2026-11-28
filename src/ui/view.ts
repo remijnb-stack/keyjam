@@ -1,26 +1,49 @@
 // The screen: transport bar, beat display, the 4x4 pads, the Layers side
 // bar, the layer editor and the key help. Built once; `render` runs every
-// animation frame and only touches what changed.
+// animation frame and only touches what changed. On a phone held upright the
+// play controls, beat display and pads fill the screen, and the rest is below.
 
 import { HIGH_LATENCY, MAX_OFFSET_MS, MIN_OFFSET_MS } from "../audio/latency";
 import type { Action } from "../input/keyboard";
 import type { Kit, Pad } from "../kit";
 import { SAMPLE_BY_ID, variantLabel } from "../library";
 import { LOOP_BAR_OPTIONS, type LoopBars, type Looper, BEATS_PER_BAR, MAX_BPM, MIN_BPM } from "../looper/looper";
-import { button, h, setText } from "./dom";
+import { button, h, keysOrTouch, setText } from "./dom";
 import { Editor, type EditorHandlers } from "./editor";
 import { type LayerHandlers, LayersPanel } from "./layers";
 import { type SoundHandlers, SoundPanel } from "./sound";
 
+/** Screens this narrow get the phone layout. */
+const PHONE = "(max-width: 600px)";
+
+/** The parts of the screen that sit in different places on a phone. */
+interface Parts {
+  main: HTMLElement;
+  header: HTMLElement;
+  controls: HTMLElement;
+  tempo: HTMLElement;
+  bars: HTMLElement;
+  toggles: HTMLElement;
+  transport: HTMLElement;
+  undo: HTMLElement;
+  clear: HTMLElement;
+  timeline: HTMLElement;
+  pads: HTMLElement;
+  side: HTMLElement;
+  help: HTMLElement;
+  audio: HTMLElement;
+}
+
 export interface ViewHandlers {
-  action(action: Action): void;
+  /** `pressedAt` is when the pad was tapped (performance.now() clock), if known. */
+  action(action: Action, pressedAt?: number): void;
   bars(bars: LoopBars): void;
   quantize(): void;
   offset(ms: number): void;
   start(): void;
   layer: Omit<LayerHandlers, "open">;
   editor: Omit<EditorHandlers, "close">;
-  /** Selects a pad to change its sound (Shift+key, or clicking its name). */
+  /** Selects a pad to change its sound (Shift+key, clicking its name, or its ✎ on a touch screen). */
   select(padId: string): void;
   sound: SoundHandlers;
 }
@@ -48,6 +71,7 @@ export class View {
   private readonly latencyHint: HTMLElement;
   private readonly offsetInput: HTMLInputElement;
   private readonly offsetValue: HTMLElement;
+  private readonly parts: Parts;
 
   constructor(
     root: HTMLElement,
@@ -92,14 +116,8 @@ export class View {
 
     this.recordButton = button("● Rec", "Record a layer (Space)", act({ type: "record" }), "record");
     this.playButton = button("▶ Play", "Play/stop (Enter)", act({ type: "play" }));
-    const transport = h(
-      "div",
-      { class: "group" },
-      this.recordButton,
-      this.playButton,
-      button("Undo", "Undo the last change (Ctrl+Z)", act({ type: "undo" })),
-      button("Clear", "Stop and clear everything (Esc)", act({ type: "clear" })),
-    );
+    const undo = button("Undo", "Undo the last change (Ctrl+Z)", act({ type: "undo" }));
+    const clear = button("Clear", "Stop and clear everything (Esc)", act({ type: "clear" }));
 
     this.status = h("span", { class: "status" });
     this.layerCount = h("span", { class: "layers" });
@@ -113,15 +131,20 @@ export class View {
         const el = h(
           "div",
           { class: `pad row-${pad.row}`, role: "button" },
-          h("span", { class: "key" }, pad.label),
+          h("span", { class: "key keys-only" }, pad.label),
           h("span", { class: "pad-sound" }, name, variant),
+          button("✎", "Change this sound", () => handlers.select(pad.id), "pad-edit touch-only"),
         );
         el.addEventListener("pointerdown", (e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest(".pad-edit")) return; // the ✎ button selects the pad itself
           e.preventDefault();
-          // Clicking the sound's name selects the pad; anywhere else plays it.
-          if ((e.target as HTMLElement).closest(".pad-sound")) handlers.select(pad.id);
-          else handlers.action({ type: "pad", padId: pad.id });
+          // With a mouse, clicking the sound's name selects the pad. A tap anywhere plays it.
+          if (e.pointerType === "mouse" && target.closest(".pad-sound")) handlers.select(pad.id);
+          else handlers.action({ type: "pad", padId: pad.id }, e.timeStamp);
         });
+        // No menu or text selection when a finger stays on a pad.
+        el.addEventListener("contextmenu", (e) => e.preventDefault());
         this.padNames.set(pad.id, { name, variant });
         this.padEls.set(pad.id, el);
         grid.append(el);
@@ -139,7 +162,7 @@ export class View {
     ];
     const help = h(
       "ul",
-      { class: "help" },
+      { class: "help keys-only" },
       ...keys.map(([key, what]) => h("li", {}, h("kbd", {}, key), ` ${what}`)),
     );
 
@@ -178,37 +201,67 @@ export class View {
       this.latencyHint,
     );
 
-    this.overlayText = h("p", {}, "Press any key or click to start");
+    this.overlayText = h("p", {}, ...keysOrTouch("Press any key or click to start", "Tap to start"));
     this.overlay = h(
       "div",
       { class: "overlay" },
       h("div", { class: "overlay-card" }, h("h2", {}, "keyjam"), this.overlayText),
     );
-    this.overlay.addEventListener("pointerdown", () => handlers.start());
+    // On a click, not a press: on touch screens only the end of a tap allows sound to start.
+    this.overlay.addEventListener("click", () => handlers.start());
 
-    root.append(
-      h(
-        "main",
-        { class: "app" },
-        h("header", {}, h("h1", {}, "keyjam"), h("span", { class: "tagline" }, "drums on your keyboard")),
-        h("section", { class: "controls" }, tempo, barsGroup, h("div", { class: "group" }, this.metronomeButton, this.quantizeButton), transport),
-        h(
-          "div",
-          { class: "workspace" },
-          h(
-            "div",
-            { class: "play-area" },
-            h("section", { class: "timeline" }, h("div", { class: "timeline-info" }, this.status, this.layerCount), this.beats),
-            grid,
-          ),
-          h("div", { class: "side" }, this.soundPanel.el, this.panel.el),
-        ),
+    this.parts = {
+      main: h("main", { class: "app" }),
+      header: h("header", {}, h("h1", {}, "keyjam"), h("span", { class: "tagline keys-only" }, "drums on your keyboard")),
+      controls: h("section", { class: "controls" }),
+      tempo,
+      bars: barsGroup,
+      toggles: h("div", { class: "group" }),
+      transport: h("div", { class: "group transport" }),
+      undo,
+      clear,
+      timeline: h("section", { class: "timeline" }, h("div", { class: "timeline-info" }, this.status, this.layerCount), this.beats),
+      pads: grid,
+      side: h("div", { class: "side" }, this.soundPanel.el, this.panel.el),
+      help,
+      audio,
+    };
+    const phone = window.matchMedia(PHONE);
+    this.place(phone.matches);
+    phone.addEventListener("change", (e) => this.place(e.matches));
+    root.append(this.parts.main, this.overlay);
+  }
+
+  /** Puts the parts of the screen in place, for a phone or a wider screen. */
+  private place(phone: boolean): void {
+    const p = this.parts;
+    p.main.classList.toggle("phone", phone);
+    if (phone) {
+      // The play controls, beat display and pads fill the screen; the rest is below.
+      p.toggles.replaceChildren(this.metronomeButton);
+      p.transport.replaceChildren(this.recordButton, this.playButton, p.undo);
+      p.controls.replaceChildren(p.tempo, p.toggles, p.transport);
+      p.main.replaceChildren(
+        h("div", { class: "stage" }, p.header, p.controls, p.timeline, p.pads),
+        h("section", { class: "more" }, p.bars, this.quantizeButton, p.clear),
+        p.side,
         this.editor.el,
-        help,
-        audio,
-      ),
-      this.overlay,
-    );
+        p.help,
+        p.audio,
+      );
+    } else {
+      p.toggles.replaceChildren(this.metronomeButton, this.quantizeButton);
+      p.transport.replaceChildren(this.recordButton, this.playButton, p.undo, p.clear);
+      p.controls.replaceChildren(p.tempo, p.bars, p.toggles, p.transport);
+      p.main.replaceChildren(
+        p.header,
+        p.controls,
+        h("div", { class: "workspace" }, h("div", { class: "play-area" }, p.timeline, p.pads), p.side),
+        this.editor.el,
+        p.help,
+        p.audio,
+      );
+    }
   }
 
   get editorOpen(): boolean {

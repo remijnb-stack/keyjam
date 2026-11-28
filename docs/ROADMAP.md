@@ -48,18 +48,19 @@ speaker. The desktop layout and keys stay as they are. Two pull requests, in
 this order; each is tested on the live site after merging.
 
 **Touch pads and phone layout (v1.6a)**
-- [ ] A tap anywhere on a pad plays it. On touch screens a small ✎ button in
-      the pad's corner selects its sound (today the sound's name covers the
-      middle of the pad, so a tap there selects instead of plays)
-- [ ] Upright phone layout: tempo −/+, metronome, Rec, Play, Undo and the
-      count-in/status bar in a compact bar on top; the 16 pads fill the rest of
-      the screen. Loop length, quantize, Clear, Sound, Layers and latency go below
-- [ ] Sound starts on the first tap (on release too, not only on press) and
+- [x] A tap anywhere on a pad plays it. On touch screens a small ✎ button in
+      the pad's corner selects its sound (the sound's name used to cover the
+      middle of the pad, so a tap there selected instead of played)
+- [x] Phone layout (screens up to 600 px wide): tempo −/+, metronome, Rec,
+      Play, Undo and the count-in/status bar in a compact bar on top; the 16
+      pads fill the rest of the screen. Loop length, quantize, Clear, Sound,
+      Layers and latency go below
+- [x] Sound starts on the first tap (on release too, not only on press) and
       comes back after switching apps
-- [ ] Tapped hits are recorded with the tap's timestamp, like key presses
-- [ ] No keyboard text on touch-only screens: key letters on pads, the key
+- [x] Tapped hits are recorded with the tap's timestamp, like key presses
+- [x] No keyboard text on touch-only screens: key letters on pads, the key
       list, "Press any key", "Press Space", "Shift + key"
-- [ ] No zoom, text selection or long-press menu when tapping fast
+- [x] No zoom, text selection or long-press menu when tapping fast
 
 **Home screen and screen on (v1.6b)**
 - [ ] Add to home screen: icon, opens full screen, upright (needs internet)

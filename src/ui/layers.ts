@@ -3,7 +3,7 @@
 
 import { PAD_BY_ID, type PadRow } from "../kit";
 import type { Hit, Looper } from "../looper/looper";
-import { button, h } from "./dom";
+import { button, h, keysOrTouch } from "./dom";
 
 export interface LayerHandlers {
   mute(id: number): void;
@@ -97,7 +97,8 @@ export class LayersPanel {
     }
 
     if (cards.length === 0) {
-      cards.push(h("p", { class: "empty" }, "No layers yet. Press Space to record one."));
+      const hint = keysOrTouch("No layers yet. Press Space to record one.", "No layers yet. Tap Rec to record one.");
+      cards.push(h("p", { class: "empty" }, ...hint));
     }
     this.count.textContent = looper.layerCount > 0 ? String(looper.layerCount) : "";
     this.list.replaceChildren(...cards);
