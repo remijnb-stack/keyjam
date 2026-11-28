@@ -4,6 +4,7 @@
 import type { Pad } from "../kit";
 import { SAMPLE_BY_ID } from "../library";
 import { cutoffHz, lengthEnvelope, playbackRate, type SoundSettings } from "../sound";
+import { LiveTiming } from "./liveTiming";
 import { softClipCurve } from "./softClip";
 
 const MASTER_VOLUME = 0.8;
@@ -25,6 +26,7 @@ export class AudioEngine {
   private readonly buffers = new Map<string, AudioBuffer | null>();
   private readonly loading = new Map<string, Promise<AudioBuffer | null>>();
   private voices = new Set<Voice>();
+  private readonly live = new LiveTiming();
 
   /** `baseUrl` is where the sample files are, ending in a slash. */
   constructor(private readonly baseUrl: string) {
@@ -44,6 +46,17 @@ export class AudioEngine {
   /** Seconds between playing a sound and hearing it, as far as the browser knows. */
   get latency(): number {
     return (this.ctx.baseLatency || 0) + (this.ctx.outputLatency || 0);
+  }
+
+  /**
+   * Audio-clock time to play a key press or tap made at `pressedAt`
+   * (performance.now() clock): a steady time after it, see LiveTiming.
+   */
+  liveTime(pressedAt?: number): number {
+    const now = this.ctx.currentTime;
+    if (pressedAt === undefined || typeof this.ctx.getOutputTimestamp !== "function") return now;
+    const { contextTime = 0, performanceTime = 0 } = this.ctx.getOutputTimestamp();
+    return this.live.timeFor(pressedAt, now, { contextTime, performanceTime }, this.latency);
   }
 
   /** Loads a sample once and keeps it. Resolves to null if it can't be loaded. */

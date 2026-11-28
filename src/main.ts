@@ -192,7 +192,7 @@ function dispatch(action: Action, pressedAt?: number): void {
     case "pad": {
       const pad = PAD_BY_ID.get(action.padId);
       if (!pad) return;
-      engine.playPad(pad, kit[pad.id]);
+      engine.playPad(pad, kit[pad.id], engine.liveTime(pressedAt));
       // Record the hit where the player meant it: at what they were hearing.
       const handlerDelay = pressedAt === undefined ? 0 : (performance.now() - pressedAt) / 1000;
       looper.hit(pad.id, heardTime({ now, handlerDelay, latency: engine.latency, offsetMs }));
