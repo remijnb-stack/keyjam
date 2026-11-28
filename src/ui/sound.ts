@@ -5,7 +5,7 @@
 import { DEFAULT_KIT, type Kit, PAD_BY_ID } from "../kit";
 import { FAMILIES, type Family, GROUPS, type GroupId, KNOB_POSITIONS, SAMPLE_BY_ID, type Sample, sampleLabel } from "../library";
 import { MIN_LENGTH, PITCH_RANGE, type SoundSettings } from "../sound";
-import { button, h, setText } from "./dom";
+import { button, h, keysOrTouch, setText } from "./dom";
 
 export type Param = "pitch" | "tone" | "length" | "volume";
 
@@ -41,7 +41,11 @@ export class SoundPanel {
 
   constructor(private readonly handlers: SoundHandlers) {
     this.padName = h("span", { class: "sound-pad" });
-    this.empty = h("p", { class: "empty" }, "Press Shift + a pad's key, or click its name, to change its sound.");
+    this.empty = h(
+      "p",
+      { class: "empty" },
+      ...keysOrTouch("Press Shift + a pad's key, or click its name, to change its sound.", "Tap ✎ on a pad to change its sound."),
+    );
 
     const chipRow = h("div", { class: "chips" });
     for (const group of GROUPS) {

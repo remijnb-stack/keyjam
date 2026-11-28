@@ -3,8 +3,8 @@
 Play drums on your computer keyboard, and loop them.
 
 keyjam is a small music toy to find out whether making beats is fun, before
-spending money on software or gear. It runs in the browser (Chrome or Edge);
-nothing to install.
+spending money on software or gear. It runs in the browser (Chrome or Edge),
+also on an Android phone; nothing to install.
 
 **Play it:** https://remijnb-stack.github.io/keyjam/
 
@@ -21,6 +21,15 @@ Press any key to start, then play the pads:
 
 The grid works like the 4×4 pads on a pad controller. The closed hat cuts off
 the open hat, as on a real drum machine.
+
+## On a phone
+
+Hold the phone upright and tap to start. Tempo, metronome, **Rec**, **Play**
+and **Undo** are on top and the pads fill the rest of the screen; tap a pad
+anywhere to play it. Loop length, quantize, **Clear** and the side bar are
+below the pads. Tap **✎** on a pad to change its sound.
+
+Made for Chrome on Android; other phones may work too.
 
 ## Changing sounds
 

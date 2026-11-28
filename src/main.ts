@@ -247,3 +247,13 @@ window.addEventListener("keydown", (event) => {
   event.preventDefault();
   dispatch(action, event.timeStamp);
 });
+
+// On a touch screen only the end of a tap allows sound to start, and a phone
+// may pause it while another app is in front. So try again then.
+function resumeAudio(): void {
+  if (engine && engine.ctx.state !== "running") void engine.ctx.resume();
+}
+window.addEventListener("pointerup", resumeAudio);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) resumeAudio();
+});
