@@ -41,6 +41,38 @@ Three pull requests, in this order.
 - [x] Kit and last loop saved in the browser (layers, hit volumes, mute/solo,
       tempo, loop length, latency offset), with *Reset kit*
 
+## v1.6: mobile
+
+Play and loop on an Android phone (Chrome), held upright, through the phone
+speaker. The desktop layout and keys stay as they are. Two pull requests, in
+this order; each is tested on the live site after merging.
+
+**Touch pads and phone layout (v1.6a)**
+- [ ] A tap anywhere on a pad plays it. On touch screens a small ✎ button in
+      the pad's corner selects its sound (today the sound's name covers the
+      middle of the pad, so a tap there selects instead of plays)
+- [ ] Upright phone layout: tempo −/+, metronome, Rec, Play, Undo and the
+      count-in/status bar in a compact bar on top; the 16 pads fill the rest of
+      the screen. Loop length, quantize, Clear, Sound, Layers and latency go below
+- [ ] Sound starts on the first tap (on release too, not only on press) and
+      comes back after switching apps
+- [ ] Tapped hits are recorded with the tap's timestamp, like key presses
+- [ ] No keyboard text on touch-only screens: key letters on pads, the key
+      list, "Press any key", "Press Space", "Shift + key"
+- [ ] No zoom, text selection or long-press menu when tapping fast
+
+**Home screen and screen on (v1.6b)**
+- [ ] Add to home screen: icon, opens full screen, upright (needs internet)
+- [ ] The screen stays on while the loop plays or records
+- [ ] **Open question:** what latency does the phone speaker give on the real
+      phone, and does recording line up without changing the offset?
+
+**Later on mobile**
+- [ ] Layer editor by touch: bigger cells, swipe to scroll, volume per hit
+- [ ] Sound block by touch: reset a slider without double-clicking
+- [ ] iPhone (Safari): sound with the silent switch on, starting sound, latency
+- [ ] Landscape layout, and offline use
+
 ## v2: melody
 
 - [ ] `Tab` switches between drum mode and piano mode
